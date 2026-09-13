@@ -1,0 +1,47 @@
+{
+  "name": "screenlink",
+  "productName": "ScreenLink",
+  "version": "0.1.0",
+  "description": "Serverless peer-to-peer screen and audio sharing",
+  "main": "main.js",
+  "author": "Gabriel Felippe",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "build:native": "native\\audio-capture\\build.bat",
+    "dist": "electron-builder --win portable"
+  },
+  "build": {
+    "appId": "dev.gabriel.screenlink",
+    "productName": "ScreenLink",
+    "files": [
+      "main.js",
+      "preload.js",
+      "sdp-dictionary.txt",
+      "renderer/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "bin",
+        "to": "bin",
+        "filter": [
+          "*.exe"
+        ]
+      }
+    ],
+    "win": {
+      "target": "portable"
+    },
+    "directories": {
+      "output": "dist"
+    }
+  },
+  "devDependencies": {
+    "electron": "^44.3.0",
+    "electron-builder": "^26.15.3"
+  },
+  "allowScripts": {
+    "electron@44.3.0": true
+  }
+}

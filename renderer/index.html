@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob: mediastream:; connect-src 'self'">
+  <title>ScreenLink</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <svg class="sprite" aria-hidden="true">
+    <symbol id="i-screen" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+    <symbol id="i-volume" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></symbol>
+    <symbol id="i-muted" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M17 9l5 6M22 9l-5 6"/></symbol>
+    <symbol id="i-stats" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></symbol>
+    <symbol id="i-pip" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><rect x="12" y="12" width="7" height="6" rx="1"/></symbol>
+    <symbol id="i-full" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  </svg>
+
+  <!-- ===================== Connect ===================== -->
+  <main id="connect-view" class="connect">
+    <header class="brand">
+      <div class="logo" aria-hidden="true"><svg><use href="#i-screen"/></svg></div>
+      <div>
+        <h1>ScreenLink</h1>
+        <p class="sub">Peer-to-peer screen sharing. No servers, no accounts.</p>
+      </div>
+      <button id="settings-btn" class="icon-btn" title="Settings" aria-label="Settings"><svg><use href="#i-gear"/></svg></button>
+    </header>
+
+    <section id="connect-home" class="cards">
+      <article class="card">
+        <h2>Start a session</h2>
+        <p class="sub">Create an invite code and send it to the person you want to connect with.</p>
+        <div class="spacer"></div>
+        <button id="create-invite" class="btn primary">Create invite</button>
+      </article>
+      <article class="card">
+        <h2>Join a session</h2>
+        <p class="sub">Paste the invite code someone sent you.</p>
+        <textarea id="join-code" class="code" placeholder="SL2-…" spellcheck="false"></textarea>
+        <button id="join" class="btn primary">Join</button>
+      </article>
+    </section>
+
+    <section id="host-flow" class="card flow" hidden>
+      <div class="step">
+        <h3><span class="num">1</span> Send this invite code to your peer</h3>
+        <div class="code-box">
+          <textarea id="invite-out" class="code" readonly spellcheck="false"></textarea>
+          <button class="btn copy" data-copy="invite-out">Copy</button>
+        </div>
+      </div>
+      <div class="step">
+        <h3><span class="num">2</span> Paste the answer code they send back</h3>
+        <textarea id="answer-in" class="code" placeholder="SL2-…" spellcheck="false"></textarea>
+        <div class="row">
+          <button class="btn ghost cancel">Cancel</button>
+          <button id="connect" class="btn primary">Connect</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="guest-flow" class="card flow" hidden>
+      <div class="step">
+        <h3><span class="num">2</span> Send this answer code back</h3>
+        <div class="code-box">
+          <textarea id="answer-out" class="code" readonly spellcheck="false"></textarea>
+          <button class="btn copy" data-copy="answer-out">Copy</button>
+        </div>
+        <p class="sub">Send it right away. The connection starts as soon as they paste it.</p>
+        <div class="row">
+          <button class="btn ghost cancel">Cancel</button>
+        </div>
+      </div>
+    </section>
+
+    <p id="connect-status" class="status" role="status"></p>
+  </main>
+
+  <!-- ===================== Session ===================== -->
+  <main id="session-view" class="session" hidden>
+    <div id="stage" class="stage">
+      <video id="remote-video" autoplay playsinline></video>
+      <div id="stage-empty" class="stage-empty">
+        <div class="pulse" aria-hidden="true"></div>
+        <h2>Connected</h2>
+        <p id="stage-empty-text" class="sub">Neither of you is sharing yet.</p>
+      </div>
+      <div id="remote-label" class="chip" hidden><span class="live-dot"></span><span id="remote-name"></span></div>
+      <div id="banner" class="banner" role="status" hidden></div>
+      <aside id="stats" class="stats" hidden></aside>
+      <div id="self-preview" class="self-preview" hidden>
+        <video id="local-video" autoplay muted playsinline></video>
+        <span>Your share</span>
+      </div>
+    </div>
+
+    <footer class="toolbar">
+      <div class="tb-left">
+        <div id="sharing-pill" class="chip live" hidden><span class="live-dot"></span><span id="sharing-name"></span></div>
+        <span id="audio-mode" class="sub"></span>
+      </div>
+      <div class="tb-center">
+        <button id="share-btn" class="btn primary"><svg><use href="#i-screen"/></svg> Share</button>
+        <button id="stop-btn" class="btn danger" hidden><svg><use href="#i-stop"/></svg> Stop sharing</button>
+        <select id="quality-select" title="Stream quality" aria-label="Stream quality"></select>
+        <label class="toggle" title="Keep text sharp at the cost of smoothness">
+          <input type="checkbox" id="detail-toggle"> Text
+        </label>
+      </div>
+      <div class="tb-right">
+        <button id="mute-btn" class="icon-btn" title="Mute" aria-label="Mute"><svg><use href="#i-volume"/></svg></button>
+        <input id="volume" type="range" min="0" max="100" aria-label="Volume">
+        <button id="preview-btn" class="icon-btn" title="Show your own share" aria-label="Self preview"><svg><use href="#i-pip"/></svg></button>
+        <button id="stats-btn" class="icon-btn" title="Stream stats" aria-label="Stats"><svg><use href="#i-stats"/></svg></button>
+        <button id="fullscreen-btn" class="icon-btn" title="Fullscreen" aria-label="Fullscreen"><svg><use href="#i-full"/></svg></button>
+        <button id="disconnect-btn" class="btn ghost danger-text">Disconnect</button>
+      </div>
+    </footer>
+  </main>
+
+  <!-- ===================== Picker ===================== -->
+  <dialog id="picker" class="modal picker">
+    <header class="modal-head">
+      <h2>Share your screen</h2>
+      <form method="dialog"><button class="icon-btn" aria-label="Close"><svg><use href="#i-close"/></svg></button></form>
+    </header>
+    <nav class="tabs">
+      <button type="button" data-tab="screen">Screens</button>
+      <button type="button" data-tab="window">Applications</button>
+    </nav>
+    <div id="source-grid" class="source-grid"></div>
+    <footer class="picker-options">
+      <label class="field">Quality <select id="picker-quality"></select></label>
+      <label class="toggle"><input type="checkbox" id="picker-audio"> Share audio</label>
+      <select id="picker-audio-scope" aria-label="Which audio to share" hidden>
+        <option value="app">This app only</option>
+        <option value="system">All computer audio</option>
+      </select>
+      <label class="toggle"><input type="checkbox" id="picker-detail"> Optimize for text</label>
+      <span id="picker-audio-note" class="sub note"></span>
+      <button type="button" id="go-live" class="btn primary" disabled>Go live</button>
+    </footer>
+  </dialog>
+
+  <!-- ===================== Settings ===================== -->
+  <dialog id="settings" class="modal settings">
+    <header class="modal-head">
+      <h2>Settings</h2>
+      <form method="dialog"><button class="icon-btn" aria-label="Close"><svg><use href="#i-close"/></svg></button></form>
+    </header>
+    <div class="settings-body">
+      <label class="field stacked">Preferred video codec
+        <select id="set-codec"></select>
+        <span class="sub">H264 usually uses your GPU encoder. The person who creates the invite decides; VP8 is the fallback.</span>
+      </label>
+      <fieldset>
+        <legend>TURN relay (optional)</legend>
+        <p class="sub">Only needed if a direct connection fails on both sides (strict NAT or CGNAT). Applies to the next connection.</p>
+        <label class="field stacked">URL <input id="set-turn-url" placeholder="turn:relay.example.com:3478" spellcheck="false"></label>
+        <label class="field stacked">Username <input id="set-turn-user" spellcheck="false"></label>
+        <label class="field stacked">Password <input id="set-turn-pass" type="password"></label>
+      </fieldset>
+      <p id="helper-status" class="sub"></p>
+      <div class="row">
+        <button id="settings-save" class="btn primary">Save</button>
+      </div>
+    </div>
+  </dialog>
+</body>
+</html>

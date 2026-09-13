@@ -1,0 +1,5 @@
+node_modules/
+dist/
+bin/*.exe
+native/audio-capture/*.obj
+native/audio-capture/*.pdb
