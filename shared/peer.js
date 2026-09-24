@@ -1,15 +1,21 @@
-import { encodeCode, decodeCode, waitForIceGathering, mungeLocalSdp, mungeRemoteSdp } from './signaling.js';
+import { waitForIceGathering, mungeLocalSdp, mungeRemoteSdp } from './sdp.js';
 
-const STUN_SERVERS = [
+export const STUN_SERVERS = [
   { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
   { urls: 'stun:stun.cloudflare.com:3478' },
 ];
 
 export const VIDEO_CODECS = ['H264', 'AV1', 'VP9', 'VP8'];
 
+export function iceServersWith(turn) {
+  const servers = [...STUN_SERVERS];
+  if (turn && turn.url) servers.push({ urls: turn.url, username: turn.username, credential: turn.credential });
+  return servers;
+}
+
 // Offers only what's needed: the preferred video codec (for H.264, only packetization-mode=1,
 // which hardware encoders use), VP8 as a universal fallback, RTX for retransmissions, and Opus.
-// Every extra codec adds ~6 SDP lines, and the SDP ends up in a code people paste into chat.
+// Every extra codec adds ~6 SDP lines, and manual codes carry the whole SDP.
 function preferCodecs(transceiver, kind, preferredName) {
   const caps = RTCRtpReceiver.getCapabilities(kind);
   if (!caps || !transceiver.setCodecPreferences) return;
@@ -23,24 +29,29 @@ function preferCodecs(transceiver, kind, preferredName) {
     chosen = [...family(preferredName), ...(preferredName === 'VP8' ? [] : family('VP8'))];
     chosen.push(...caps.codecs.filter((c) => is(c, 'rtx')));
   }
+  if (!chosen.length) return;
   try { transceiver.setCodecPreferences(chosen); } catch (err) { console.warn('setCodecPreferences failed', err); }
 }
 
 /**
- * One peer-to-peer session. Both sides own exactly one video and one audio transceiver,
- * both sendrecv, negotiated once. Sharing only swaps tracks with replaceTrack(), so the
- * pasted codes are never needed again, and both people can share at the same time.
+ * One peer-to-peer session. Each side owns exactly one video and one audio transceiver,
+ * negotiated once. Sharing only swaps tracks with replaceTrack(), so the connection never
+ * has to be renegotiated, and both people can share at the same time.
  *
- * Events: 'state' {detail: connectionState}, 'message' {detail: object}, 'closed'
+ * Directions: normally sendrecv. `receiveOnly` is for the phone viewer, which can't share;
+ * `sendOnly` is for the desktop's LAN bridge, which forwards what it receives to a phone.
+ *
+ * Events: 'state' {detail: connectionState}, 'message' {detail: object}, 'channel-open', 'closed'
  */
 export class Peer extends EventTarget {
-  constructor({ turn, videoCodec = 'H264', debugAudio = false } = {}) {
+  constructor({ iceServers = STUN_SERVERS, videoCodec = 'H264', receiveOnly = false, sendOnly = false, debugAudio = false } = {}) {
     super();
-    const iceServers = [...STUN_SERVERS];
-    if (turn && turn.url) iceServers.push({ urls: turn.url, username: turn.username, credential: turn.credential });
     this.videoCodec = videoCodec;
+    this.direction = receiveOnly ? 'recvonly' : sendOnly ? 'sendonly' : 'sendrecv';
     this.debugAudio = debugAudio;
-    this.pc = new RTCPeerConnection({ iceServers, bundlePolicy: 'max-bundle', encodedInsertableStreams: debugAudio });
+    const config = { iceServers, bundlePolicy: 'max-bundle' };
+    if (debugAudio) config.encodedInsertableStreams = true;
+    this.pc = new RTCPeerConnection(config);
     this.videoTx = null;
     this.audioTx = null;
     this.dc = null;
@@ -51,54 +62,50 @@ export class Peer extends EventTarget {
     });
   }
 
-  // ---- Host --------------------------------------------------------------
-  async createInvite() {
-    this.videoTx = this.pc.addTransceiver('video', { direction: 'sendrecv' });
-    this.audioTx = this.pc.addTransceiver('audio', { direction: 'sendrecv' });
-    // The host picks the codecs; the guest's answer just follows the offer's order.
+  /** Offerer: returns the offer SDP with every ICE candidate included. */
+  async createOffer() {
+    this.videoTx = this.pc.addTransceiver('video', { direction: this.direction });
+    this.audioTx = this.pc.addTransceiver('audio', { direction: this.direction });
+    // The offerer picks the codecs; the answer just follows the offer's order.
     preferCodecs(this.videoTx, 'video', this.videoCodec);
     preferCodecs(this.audioTx, 'audio', 'opus');
-    this.#setupTransceivers();
-    this.#openDataChannel();
+    this.#afterTransceivers();
     await this.#setLocal(await this.pc.createOffer());
     await waitForIceGathering(this.pc);
-    return encodeCode(this.pc.localDescription);
+    return this.pc.localDescription.sdp;
   }
 
-  async acceptAnswer(code) {
-    const answer = await decodeCode(code, 'answer');
-    await this.pc.setRemoteDescription({ type: 'answer', sdp: mungeRemoteSdp(answer.sdp) });
-  }
-
-  // ---- Guest -------------------------------------------------------------
-  async acceptInvite(code) {
-    const offer = await decodeCode(code, 'offer');
-    await this.pc.setRemoteDescription({ type: 'offer', sdp: mungeRemoteSdp(offer.sdp) });
+  /** Answerer: applies the offer and returns the answer SDP with every ICE candidate included. */
+  async acceptOffer(sdp) {
+    await this.pc.setRemoteDescription({ type: 'offer', sdp: mungeRemoteSdp(sdp) });
     for (const tx of this.pc.getTransceivers()) {
-      tx.direction = 'sendrecv';
+      tx.direction = this.direction;
       if (tx.receiver.track.kind === 'video') this.videoTx = tx;
       else this.audioTx = tx;
     }
     if (!this.videoTx || !this.audioTx) throw new Error('The invite is missing audio or video. Is it from ScreenLink?');
-    this.#setupTransceivers();
-    this.#openDataChannel();
+    this.#afterTransceivers();
     await this.#setLocal(await this.pc.createAnswer());
     await waitForIceGathering(this.pc);
-    return encodeCode(this.pc.localDescription);
+    return this.pc.localDescription.sdp;
   }
 
-  // ---- Shared --------------------------------------------------------------
+  async acceptAnswer(sdp) {
+    await this.pc.setRemoteDescription({ type: 'answer', sdp: mungeRemoteSdp(sdp) });
+  }
+
   async #setLocal(description) {
     try {
       await this.pc.setLocalDescription({ type: description.type, sdp: mungeLocalSdp(description.sdp) });
     } catch (err) {
-      // If a future Chromium rejects local munging, fall back to mono playback rather than failing.
+      // If a browser rejects local munging, fall back to mono playback rather than failing.
       console.warn(`local SDP munge rejected (${err.message}); audio will play back in mono`);
       await this.pc.setLocalDescription(description);
     }
   }
 
-  #setupTransceivers() {
+  #afterTransceivers() {
+    this.#openDataChannel();
     if (this.debugAudio) this.#installOpusProbe();
   }
 
@@ -148,10 +155,6 @@ export class Peer extends EventTarget {
     await this.audioTx.sender.replaceTrack(audioTrack || null);
   }
 
-  async setAudioTrack(audioTrack) {
-    await this.audioTx.sender.replaceTrack(audioTrack || null);
-  }
-
   /** Apply a quality preset to the video sender (bitrate, fps, degradation behavior). */
   async applyVideoParams({ maxBitrate, maxFramerate, detail }) {
     const sender = this.videoTx.sender;
@@ -159,7 +162,7 @@ export class Peer extends EventTarget {
     if (!params.encodings || !params.encodings.length) params.encodings = [{}];
     const enc = params.encodings[0];
     enc.maxBitrate = maxBitrate;
-    enc.maxFramerate = maxFramerate;
+    if (maxFramerate) enc.maxFramerate = maxFramerate;
     enc.scaleResolutionDownBy = 1;
     enc.priority = 'high';
     enc.networkPriority = 'high';

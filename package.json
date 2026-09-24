@@ -1,7 +1,7 @@
 {
   "name": "screenlink",
   "productName": "ScreenLink",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Serverless peer-to-peer screen and audio sharing",
   "main": "main.js",
   "author": "Gabriel Felippe",
@@ -19,7 +19,9 @@
       "main.js",
       "preload.js",
       "sdp-dictionary.txt",
-      "renderer/**/*"
+      "renderer/**/*",
+      "shared/**/*",
+      "web/**/*"
     ],
     "extraResources": [
       {
@@ -43,5 +45,11 @@
   },
   "allowScripts": {
     "electron@44.3.0": true
+  },
+  "dependencies": {
+    "qrcode-generator": "^2.0.4"
+  },
+  "screenlink": {
+    "webViewerUrl": "https://g-lippe.github.io/ScreenLink/"
   }
 }

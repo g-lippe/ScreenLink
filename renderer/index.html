@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob: mediastream:; connect-src 'self'">
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob: mediastream:; connect-src 'self' wss://broker.hivemq.com:8884 wss://test.mosquitto.org:8081 wss://broker.emqx.io:8084">
   <title>ScreenLink</title>
   <link rel="stylesheet" href="styles.css">
   <script type="module" src="app.js"></script>
@@ -19,6 +19,7 @@
     <symbol id="i-full" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
     <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
     <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.2"/><path d="M11 18.5h2"/></symbol>
   </svg>
 
   <!-- ===================== Connect ===================== -->
@@ -35,25 +36,55 @@
     <section id="connect-home" class="cards">
       <article class="card">
         <h2>Start a session</h2>
-        <p class="sub">Create an invite code and send it to the person you want to connect with.</p>
+        <p class="sub">Get a short code for the person you want to connect with. They can join from ScreenLink, or watch from a phone.</p>
         <div class="spacer"></div>
         <button id="create-invite" class="btn primary">Create invite</button>
       </article>
       <article class="card">
         <h2>Join a session</h2>
-        <p class="sub">Paste the invite code someone sent you.</p>
-        <textarea id="join-code" class="code" placeholder="SL2-…" spellcheck="false"></textarea>
+        <p class="sub">Enter the code or link someone sent you.</p>
+        <input id="join-code" class="code-input" placeholder="7K3M-QX9P" spellcheck="false" autocomplete="off" aria-label="Invite code or link">
+        <div class="spacer"></div>
         <button id="join" class="btn primary">Join</button>
       </article>
     </section>
 
     <section id="host-flow" class="card flow" hidden>
+      <div class="invite">
+        <div class="invite-main">
+          <h3>Send this code to your friend</h3>
+          <div id="invite-code" class="big-code"></div>
+          <div class="row start">
+            <button id="copy-code" class="btn">Copy code</button>
+            <button id="copy-link" class="btn">Copy link</button>
+          </div>
+          <p class="sub">In ScreenLink they enter the code under <b>Join a session</b>. On a phone, the link opens the web viewer.</p>
+        </div>
+        <figure class="qr-box">
+          <img id="invite-qr" alt="QR code of the invite link">
+          <figcaption>Scan to watch on a phone</figcaption>
+        </figure>
+      </div>
+      <div class="row between">
+        <p id="host-status" class="status busy inline">Waiting for your friend to join…</p>
+        <button class="btn ghost cancel">Cancel</button>
+      </div>
+    </section>
+
+    <section id="join-flow" class="card flow narrow" hidden>
+      <h3>Joining <span id="joining-code"></span></h3>
+      <p id="join-status" class="status busy inline">Reaching the connection relays…</p>
+      <div class="row"><button class="btn ghost cancel">Cancel</button></div>
+    </section>
+
+    <section id="manual-host-flow" class="card flow" hidden>
       <div class="step">
-        <h3><span class="num">1</span> Send this invite code to your peer</h3>
+        <h3><span class="num">1</span> Send this manual invite code to your peer</h3>
         <div class="code-box">
           <textarea id="invite-out" class="code" readonly spellcheck="false"></textarea>
           <button class="btn copy" data-copy="invite-out">Copy</button>
         </div>
+        <p class="sub">They paste it under <b>Join a session</b> and send back an answer code.</p>
       </div>
       <div class="step">
         <h3><span class="num">2</span> Paste the answer code they send back</h3>
@@ -65,7 +96,7 @@
       </div>
     </section>
 
-    <section id="guest-flow" class="card flow" hidden>
+    <section id="manual-guest-flow" class="card flow" hidden>
       <div class="step">
         <h3><span class="num">2</span> Send this answer code back</h3>
         <div class="code-box">
@@ -78,6 +109,11 @@
         </div>
       </div>
     </section>
+
+    <div id="manual-entry" class="manual-entry">
+      <button id="manual-create" class="link-btn">Can't connect? Create a manual invite instead</button>
+      <p class="sub">Manual codes skip the connection relays: both of you paste a longer code to each other.</p>
+    </div>
 
     <p id="connect-status" class="status" role="status"></p>
   </main>
@@ -96,6 +132,7 @@
       <aside id="stats" class="stats" hidden></aside>
       <div id="self-preview" class="self-preview" hidden>
         <video id="local-video" autoplay muted playsinline></video>
+        <p class="paused-note">Preview paused while ScreenLink isn't focused</p>
         <span>Your share</span>
       </div>
     </div>
@@ -116,6 +153,7 @@
       <div class="tb-right">
         <button id="mute-btn" class="icon-btn" title="Mute" aria-label="Mute"><svg><use href="#i-volume"/></svg></button>
         <input id="volume" type="range" min="0" max="100" aria-label="Volume">
+        <button id="phone-btn" class="icon-btn" title="Watch on your phone" aria-label="Watch on your phone"><svg><use href="#i-phone"/></svg><span id="phone-count" class="badge" hidden></span></button>
         <button id="preview-btn" class="icon-btn" title="Show your own share" aria-label="Self preview"><svg><use href="#i-pip"/></svg></button>
         <button id="stats-btn" class="icon-btn" title="Stream stats" aria-label="Stats"><svg><use href="#i-stats"/></svg></button>
         <button id="fullscreen-btn" class="icon-btn" title="Fullscreen" aria-label="Fullscreen"><svg><use href="#i-full"/></svg></button>
@@ -146,6 +184,31 @@
       <span id="picker-audio-note" class="sub note"></span>
       <button type="button" id="go-live" class="btn primary" disabled>Go live</button>
     </footer>
+  </dialog>
+
+  <!-- ===================== Phone bridge ===================== -->
+  <dialog id="phone-dialog" class="modal phone">
+    <header class="modal-head">
+      <h2>Watch on your phone</h2>
+      <form method="dialog"><button class="icon-btn" aria-label="Close"><svg><use href="#i-close"/></svg></button></form>
+    </header>
+    <div class="phone-body">
+      <figure class="qr-box large"><img id="phone-qr" alt="QR code for the phone viewer"></figure>
+      <div class="phone-text">
+        <p>Scan this with your phone's camera. It shows whatever this computer is watching, and works while your phone is on the <b>same Wi-Fi</b> as this computer.</p>
+        <p class="sub">If Windows asks whether ScreenLink may use the network, allow <b>private networks</b>.</p>
+        <p class="sub">Or open this address on the phone:</p>
+        <code id="phone-url" class="url"></code>
+        <details id="phone-other" hidden>
+          <summary class="sub">Other addresses of this computer</summary>
+          <ul id="phone-urls"></ul>
+        </details>
+        <p id="phone-status" class="sub"></p>
+        <div class="row start">
+          <button id="phone-stop" class="btn ghost danger-text">Stop phone viewing</button>
+        </div>
+      </div>
+    </div>
   </dialog>
 
   <!-- ===================== Settings ===================== -->

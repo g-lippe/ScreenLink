@@ -8,6 +8,11 @@ contextBridge.exposeInMainWorld('screenlink', {
   prepareCapture: (id, loopbackAudio) => ipcRenderer.invoke('prepare-capture', { id, loopbackAudio }),
   startAudio: (sourceId, scope) => ipcRenderer.invoke('audio-start', { sourceId, scope }),
   stopAudio: () => ipcRenderer.invoke('audio-stop'),
+  qr: (text) => ipcRenderer.invoke('qr', text),
+  startBridge: () => ipcRenderer.invoke('bridge-start'),
+  stopBridge: () => ipcRenderer.invoke('bridge-stop'),
+  onBridgeRequest: (handler) => ipcRenderer.on('bridge-request', (_e, request) => handler(request)),
+  bridgeReply: (reply) => ipcRenderer.invoke('bridge-reply', reply),
   devWrite: (name, text) => ipcRenderer.invoke('dev-write', { name, text }),
   devRead: (name) => ipcRenderer.invoke('dev-read', { name }),
 });
